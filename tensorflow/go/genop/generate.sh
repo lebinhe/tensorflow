@@ -16,7 +16,8 @@
 
 set -e
 
-go get github.com/golang/protobuf/{proto,protoc-gen-go}
+go get github.com/golang/protobuf/proto
+go get github.com/golang/protobuf/protoc-gen-go
 
 cd $(dirname $0)
 TF_DIR=${GOPATH}/src/github.com/tensorflow/tensorflow
@@ -32,9 +33,12 @@ then
     echo "bazel build -c opt @protobuf//:protoc"
     exit 1
   fi
-  PROTOC=PATH_PROTOC
+  PROTOC=$PATH_PROTOC
 fi
 
+# Ensure that protoc-gen-go is available in $PATH
+# Since ${PROTOC} will require it.
+export PATH=$PATH:${GOPATH}/bin
 mkdir -p ./internal/proto
 ${PROTOC} \
   -I ${TF_DIR} \

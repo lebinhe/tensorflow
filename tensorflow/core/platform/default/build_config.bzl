@@ -6,6 +6,7 @@ load("@protobuf//:protobuf.bzl", "py_proto_library")
 # configure may change the following lines to True
 WITH_GCP_SUPPORT = False
 WITH_HDFS_SUPPORT = False
+WITH_RDMA_SUPPORT = False
 
 # Appends a suffix to a list of deps.
 def tf_deps(deps, suffix):
@@ -30,8 +31,8 @@ def tf_proto_library_cc(name, srcs = [], has_services = None,
                         cc_stubby_versions = None,
                         cc_grpc_version = None,
                         cc_api_version = 2, go_api_version = 2,
-                        java_api_version = 2,
-                        py_api_version = 2):
+                        java_api_version = 2, py_api_version = 2,
+                        js_api_version = 2, js_codegen = "jspb"):
   native.filegroup(
       name = name + "_proto_srcs",
       srcs = srcs + tf_deps(deps, "_proto_srcs"),
@@ -46,6 +47,7 @@ def tf_proto_library_cc(name, srcs = [], has_services = None,
       srcs = srcs + tf_deps(deps, "_proto_srcs"),
       deps = deps + ["@protobuf//:cc_wkt_protos"],
       cc_libs = cc_libs + ["@protobuf//:protobuf"],
+      copts = ["-Wno-unused-but-set-variable", "-Wno-sign-compare"],
       protoc = "@protobuf//:protoc",
       default_runtime = "@protobuf//:protobuf",
       use_grpc_plugin = use_grpc_plugin,
@@ -70,8 +72,8 @@ def tf_proto_library(name, srcs = [], has_services = None,
                      deps = [], visibility = [], testonly = 0,
                      cc_libs = [],
                      cc_api_version = 2, go_api_version = 2,
-                     java_api_version = 2,
-                     py_api_version = 2):
+                     java_api_version = 2, py_api_version = 2,
+                     js_api_version = 2, js_codegen = "jspb"):
   tf_proto_library_cc(
       name = name,
       srcs = srcs + tf_deps(deps, "_proto_srcs"),
@@ -156,4 +158,11 @@ def tf_additional_lib_deps():
     deps.append("//tensorflow/core/platform/cloud:gcs_file_system")
   if WITH_HDFS_SUPPORT:
     deps.append("//tensorflow/core/platform/hadoop:hadoop_file_system")
+  return deps
+
+def tf_rdma_lib_deps():
+  deps = []
+  if WITH_RDMA_SUPPORT:
+    deps.append("//tensorflow/core/distributed_runtime/rdma:rdma_rendezvous_mgr")
+    deps.append("//tensorflow/core/distributed_runtime/rdma:rdma_mgr")
   return deps

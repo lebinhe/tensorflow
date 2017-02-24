@@ -48,7 +48,8 @@ class GrpcRemoteWorker : public WorkerInterface {
         recvtensor_(Method(GrpcWorkerMethod::kRecvTensor)),
         logging_(Method(GrpcWorkerMethod::kLogging)),
         tracing_(Method(GrpcWorkerMethod::kTracing)),
-        logger_(logger) {}
+        logger_(logger),
+        getremoteaddress_(Method(GrpcWorkerMethod::kGetRemoteAddress)){}
 
   ~GrpcRemoteWorker() override {}
 
@@ -170,6 +171,12 @@ class GrpcRemoteWorker : public WorkerInterface {
     IssueRequest(request, response, tracing_, done);
   }
 
+  void GetRemoteAddressAsync(const GetRemoteAddressRequest* request,
+                    GetRemoteAddressResponse* response,
+                    StatusCallback done) override {
+    IssueRequest(request, response, getremoteaddress_, done);
+  }
+
  private:
   // Object allocated per active RPC.
   template <class RequestMessage, class ResponseMessage>
@@ -250,6 +257,8 @@ class GrpcRemoteWorker : public WorkerInterface {
 
   // Support for logging.
   WorkerCacheLogger* logger_;
+
+  const ::grpc::RpcMethod getremoteaddress_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(GrpcRemoteWorker);
 };

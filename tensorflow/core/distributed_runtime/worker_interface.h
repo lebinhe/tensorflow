@@ -72,6 +72,10 @@ class WorkerInterface {
   virtual void TracingAsync(const TracingRequest* request,
                             TracingResponse* response, StatusCallback done) = 0;
 
+  virtual void GetRemoteAddressAsync(const GetRemoteAddressRequest* request,
+                              GetRemoteAddressResponse* response,
+                              StatusCallback done) = 0;
+
   Status GetStatus(const GetStatusRequest* request,
                    GetStatusResponse* response) {
     return CallAndWait(&ME::GetStatusAsync, request, response);
