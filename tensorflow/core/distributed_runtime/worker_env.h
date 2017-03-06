@@ -58,10 +58,9 @@ struct WorkerEnv {
 
   // A pool of threads for scheduling compute work.
   thread::ThreadPool* compute_pool = nullptr;
-
-#ifdef USE_RDMA
+#ifdef USE_RDMA  
   // rdma_mgr keeps track of rdma connections
-  RdmaMgr* rdma_mgr = nullptr;
+  RdmaMgr* rdma_mgr = nullptr; 
 #endif
 };
 

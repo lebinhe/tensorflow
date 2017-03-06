@@ -21,11 +21,14 @@ limitations under the License.
 #include "grpc++/grpc++.h"
 #include "grpc++/security/credentials.h"
 #include "grpc++/server_builder.h"
+#include "grpc/support/alloc.h"
 
 #include "tensorflow/core/common_runtime/device_factory.h"
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/common_runtime/process_util.h"
 #include "tensorflow/core/distributed_runtime/graph_mgr.h"
+#include "tensorflow/core/distributed_runtime/local_master.h"
+#include "tensorflow/core/distributed_runtime/master.h"
 #include "tensorflow/core/distributed_runtime/master_env.h"
 #include "tensorflow/core/distributed_runtime/master_session.h"
 #ifdef USE_RDMA
@@ -43,6 +46,7 @@ limitations under the License.
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/public/session_options.h"
 
 namespace tensorflow {
@@ -51,8 +55,8 @@ GrpcServer::GrpcServer(const ServerDef& server_def, Env* env)
     : server_def_(server_def), env_(env), state_(NEW) {}
 
 GrpcServer::~GrpcServer() {
-  Stop();
-  Join();
+  TF_CHECK_OK(Stop());
+  TF_CHECK_OK(Join());
 
   delete master_service_;
   delete worker_service_;
@@ -89,7 +93,7 @@ Status GrpcServer::Init() {
 
   SessionOptions sess_opts;
   sess_opts.config = server_def_.default_session_config();
-#ifdef USE_RDMA
+#ifdef USE_RDMA  
   if (server_def_.protocol()=="grpc_rdma") {
     use_rdma_ = true;
   } else {
@@ -154,8 +158,10 @@ Status GrpcServer::Init() {
   builder.AddListeningPort(strings::StrCat("0.0.0.0:", requested_port_),
                            GetServerCredentials(server_def_), &bound_port_);
   builder.SetMaxMessageSize(std::numeric_limits<int32>::max());
-  master_service_ = NewGrpcMasterService(&master_env_, &builder);
-  worker_service_ = NewGrpcWorkerService(&worker_env_, &builder);
+  master_impl_.reset(new Master(&master_env_, 0.0));
+  master_service_ = NewGrpcMasterService(master_impl_.get(), &builder);
+  worker_impl_.reset(NewGrpcWorker(&worker_env_));
+  worker_service_ = NewGrpcWorkerService(worker_impl_.get(), &builder);
   server_ = builder.BuildAndStart();
 
   if (!server_) {
@@ -191,7 +197,8 @@ Status GrpcServer::Init() {
     return errors::Internal("Could not parse port for local server from \"",
                             channel_cache->TranslateTask(name_prefix), "\".");
   }
-  worker_env_.worker_cache = NewGrpcWorkerCache(channel_cache.release());
+  worker_env_.worker_cache = NewGrpcWorkerCacheWithLocalWorker(
+      channel_cache.release(), worker_impl_.get(), name_prefix);
 
   // Finish setting up master environment.
   master_env_.ops = OpRegistry::Global();
@@ -206,17 +213,21 @@ Status GrpcServer::Init() {
   // Finish setting up worker environment.
   worker_env_.graph_mgr = new GraphMgr(&worker_env_);
   worker_env_.compute_pool = ComputePool(sess_opts);
+
 #ifdef USE_RDMA
   if (use_rdma_) {
     worker_env_.rendezvous_mgr = new RdmaRendezvousMgr(&worker_env_);
     worker_env_.rdma_mgr = new RdmaMgr(&worker_env_);
-  } else
+  } else 
 #endif
     worker_env_.rendezvous_mgr = new RpcRendezvousMgr(&worker_env_);
+
+  // Provide direct access to the master from in-process clients.
+  LocalMaster::Register(target(), master_impl_.get());
   return Status::OK();
 }
 
-Status GrpcServer::Start_Internal() {
+Status GrpcServer::Start() {
   mutex_lock l(mu_);
   switch (state_) {
     case NEW: {
@@ -228,6 +239,11 @@ Status GrpcServer::Start_Internal() {
                             [this] { worker_service_->HandleRPCsLoop(); }));
       state_ = STARTED;
       LOG(INFO) << "Started server with target: " << target();
+#ifdef USE_RDMA
+      if (use_rdma_) {
+        worker_env_.rdma_mgr->SetupChannels();
+      }
+#endif
       return Status::OK();
     }
     case STARTED:
@@ -240,16 +256,6 @@ Status GrpcServer::Start_Internal() {
   }
 }
 
-Status GrpcServer::Start() {
-    Status s = Start_Internal();
-#ifdef USE_RDMA
-    if (s.ok() && use_rdma_) {
-      worker_env_.rdma_mgr->SetupChannels();
-    }
-#endif
-    return s;
-}
-
 Status GrpcServer::Stop() {
   mutex_lock l(mu_);
   switch (state_) {
@@ -257,11 +263,8 @@ Status GrpcServer::Stop() {
       state_ = STOPPED;
       return Status::OK();
     case STARTED:
-      server_->Shutdown();
-      master_service_->Shutdown();
-      worker_service_->Shutdown();
-      state_ = STOPPED;
-      return Status::OK();
+      return errors::Unimplemented(
+          "Clean shutdown is not currently implemented");
     case STOPPED:
       LOG(INFO) << "Server already stopped (target: " << target() << ")";
       return Status::OK();
@@ -332,6 +335,11 @@ class GrpcServerFactory : public ServerFactory {
 class GrpcServerRegistrar {
  public:
   GrpcServerRegistrar() {
+    gpr_allocation_functions alloc_fns;
+    alloc_fns.malloc_fn = port::Malloc;
+    alloc_fns.realloc_fn = port::Realloc;
+    alloc_fns.free_fn = port::Free;
+    gpr_set_allocation_functions(alloc_fns);
     ServerFactory::Register("GRPC_SERVER", new GrpcServerFactory());
   }
 };

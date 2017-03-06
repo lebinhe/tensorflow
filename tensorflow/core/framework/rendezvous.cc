@@ -112,13 +112,13 @@ Status Rendezvous::ParseKey(StringPiece key, ParsedKey* out) {
 }
 
 //static
-string Rendezvous::AppendStepidToKey(const string& key,
+string Rendezvous::AppendStepidToKey(const string& key, 
         int64 step_id) {
   return strings::StrCat(key, ";", step_id);
 }
 
 // static
-void Rendezvous::GetKeyAndStepId(const string& key_with_step_id,
+void Rendezvous::GetKeyAndStepId(const string& key_with_step_id, 
         string& key, int64& step_id) {
   StringPiece s(key_with_step_id);
   // a key (with step_id) has exact 6 parts if split by ";"

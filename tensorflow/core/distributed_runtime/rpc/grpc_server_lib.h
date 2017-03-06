@@ -32,6 +32,9 @@ limitations under the License.
 
 namespace tensorflow {
 
+class GrpcWorker;
+class Master;
+
 class GrpcServer : public ServerInterface {
  protected:
   GrpcServer(const ServerDef& server_def, Env* env);
@@ -40,6 +43,8 @@ class GrpcServer : public ServerInterface {
   static Status Create(const ServerDef& server_def, Env* env,
                        std::unique_ptr<ServerInterface>* out_server);
 
+  // Destruction is only supported in the factory method. Clean
+  // shutdown is not currently implemented for this server type.
   virtual ~GrpcServer();
 
   // Implementations of ServerInterface methods.
@@ -50,8 +55,7 @@ class GrpcServer : public ServerInterface {
 
  protected:
   Status Init();
-  Status Start_Internal();
-
+  
   // A subclass can override this method to support secure credentials.
   virtual std::shared_ptr<::grpc::ServerCredentials> GetServerCredentials(
       const ServerDef& server_def) const;
@@ -90,18 +94,20 @@ class GrpcServer : public ServerInterface {
 
   // Implementation of a TensorFlow master, and RPC polling thread.
   MasterEnv master_env_;
+  std::unique_ptr<Master> master_impl_;
   AsyncServiceInterface* master_service_ = nullptr;
   std::unique_ptr<Thread> master_thread_ GUARDED_BY(mu_);
 
   // Implementation of a TensorFlow worker, and RPC polling thread.
   WorkerEnv worker_env_;
+  std::unique_ptr<GrpcWorker> worker_impl_;
   AsyncServiceInterface* worker_service_ = nullptr;
   std::unique_ptr<Thread> worker_thread_ GUARDED_BY(mu_);
 
   std::unique_ptr<::grpc::Server> server_ GUARDED_BY(mu_);
-#ifdef USE_RDMA
+#ifdef USE_RDMA  
   // Whether to use rdma for tensor data transfers
-  bool use_rdma_;
+  bool use_rdma_;   
 #endif
 };
 

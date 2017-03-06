@@ -515,9 +515,9 @@ RdmaBuffer::~RdmaBuffer() {
 void RdmaBuffer::FreeBuffer() {
   if ((buffer_ != nullptr) && buffer_on_host_) {
     free(buffer_);
-  }
+  } 
   // TODO
-  // release buffer if it is on device.
+  // release buffer if it is on device. 
   // We don't support RDMABuffer on device at this moment.
 }
 
@@ -535,7 +535,7 @@ void RdmaBuffer::CreateCPUBuffer(size_t size, bool lock) {
   if (local_status_ != none) {
     // delete existing buffer
     CHECK(!ibv_dereg_mr(self_)) << "ibv_dereg_mr failed";
-    FreeBuffer();
+    FreeBuffer();    
   }
   size_ = size;
   buffer_ = malloc(size_);
@@ -723,11 +723,11 @@ void RdmaTensorBuffer::SendNextItem() {
       rm.buffer_size_ = buffer_size;
       mu_.lock();
       if (local_status_ == none || 
-          (buffer_size > size_ &&
-           local_status_ == idle &&
+          (buffer_size > size_ && 
+           local_status_ == idle && 
            remote_status_ == idle)) {
         if ((local_status_ != none) && (buffer_size > size_)) {
-            CHECK(rm.data_type_ == DT_STRING)
+            CHECK(rm.data_type_ == DT_STRING) 
                     << "Only string tensor allows to change size";
         }
         CreateCPUBuffer(buffer_size, false);

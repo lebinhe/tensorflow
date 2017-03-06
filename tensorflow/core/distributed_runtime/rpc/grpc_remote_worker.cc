@@ -75,6 +75,12 @@ class GrpcRemoteWorker : public WorkerInterface {
                      RunGraphResponse* response, StatusCallback done) override {
     IssueRequest(request, response, rungraph_, std::move(done), call_opts);
   }
+  void RunGraphAsync(CallOptions* call_opts, RunGraphRequestWrapper* request,
+                     MutableRunGraphResponseWrapper* response,
+                     StatusCallback done) override {
+    IssueRequest(&request->ToProto(), get_proto_from_wrapper(response),
+                 rungraph_, std::move(done), call_opts);
+  }
 
   void CleanupGraphAsync(const CleanupGraphRequest* request,
                          CleanupGraphResponse* response,
@@ -170,7 +176,7 @@ class GrpcRemoteWorker : public WorkerInterface {
                     StatusCallback done) override {
     IssueRequest(request, response, tracing_, done);
   }
-
+  
   void GetRemoteAddressAsync(const GetRemoteAddressRequest* request,
                     GetRemoteAddressResponse* response,
                     StatusCallback done) override {
@@ -257,9 +263,9 @@ class GrpcRemoteWorker : public WorkerInterface {
 
   // Support for logging.
   WorkerCacheLogger* logger_;
-
+  
   const ::grpc::RpcMethod getremoteaddress_;
-
+  
   TF_DISALLOW_COPY_AND_ASSIGN(GrpcRemoteWorker);
 };
 

@@ -45,7 +45,7 @@ class GPUUtil {
   static Status SetProtoFromGPUSync(const Tensor& tensor, Device* dev,
                               const DeviceContext* device_context,
                               TensorProto* proto, bool is_dead);
-
+  
   // Copies the data in 'gpu_tensor' into 'cpu_tensor'.
   // 'gpu_tensor''s backing memory must be on 'gpu_device' and
   // 'cpu_tensor' must be allocated to be of the same size as
