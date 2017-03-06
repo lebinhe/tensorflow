@@ -460,12 +460,19 @@ void RdmaChannel::Connect(RdmaAddress& remoteAddr) {
     struct ibv_qp_attr attr;
     memset(&attr, 0, sizeof(ibv_qp_attr));
     attr.qp_state = IBV_QPS_RTR;
-    attr.path_mtu = IBV_MTU_4096;
+    attr.path_mtu = IBV_MTU_512; // MTU is 1500, 512 is recommended by mlnx
     attr.dest_qp_num = remoteAddr.qpn;
     attr.rq_psn = remoteAddr.psn;
     attr.max_dest_rd_atomic = 1;
     attr.min_rnr_timer = 12;
-    attr.ah_attr.is_global = 0;
+    attr.ah_attr.is_global = 1; // Mandatory for RoCE
+
+    attr.grh.dgid = remoteAddr.gid;
+    attr.grh.flow_label = 0;
+    // attr.grh.sgid_index = 0; // Use the first local (source) gid
+    attr.grh.hop_limit = 5; // 0 or 1 limits the message in L2
+    // attr.grh.traffic_class = 0;
+
     attr.ah_attr.dlid = remoteAddr.lid;
     attr.ah_attr.sl = 0;
     attr.ah_attr.src_path_bits = 0;
