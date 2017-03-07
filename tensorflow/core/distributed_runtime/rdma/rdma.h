@@ -24,10 +24,10 @@ namespace tensorflow {
 
 // structure to save the address of remote channels.
 struct RdmaAddress {
-      ibv_gid  gid;
       uint32_t lid;
       uint32_t qpn;
       uint32_t psn;
+      unsigned char[8] gid; // union ibv_gid gid;
 };
 // structure to save information for remote memory regions.
 struct RemoteMR{

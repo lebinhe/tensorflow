@@ -262,6 +262,12 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
     self_.lid = attr.lid;
     self_.qpn = qp_->qp_num;
     self_.psn = static_cast<uint32_t>(random::New64()) & 0xffffff;
+    
+    union ibv_gid gid; 
+    CHECK(!ibv_query_gid(adapter_->context_, (uint8_t) 1, 0, gid)) 
+        << "Query gid";
+    unsigned char* gid_bytes = reinterpret_cast<unsigned char*>(&gid);
+    memcopy(self_.gid, gid_bytes, sizeof(gid_bytes));
   }
   
   // create message and ack buffers, then initialize the tables.
@@ -308,11 +314,13 @@ RdmaChannel::~RdmaChannel() {
 void RdmaChannel::SetRemoteAddress(RdmaAddress ra, bool override) {
     mu_.lock();
     if ((override) || (!remote_set_)) { 
+      remote_.gid = ra.gid;
       remote_.lid = ra.lid;
       remote_.qpn = ra.qpn;
       remote_.psn = ra.psn;
       remote_set_ = true;
     } else {
+      CHECK(remote_.gid == ra.gid);
       CHECK(remote_.lid == ra.lid);
       CHECK(remote_.qpn == ra.qpn);
       CHECK(remote_.psn == ra.psn);   
