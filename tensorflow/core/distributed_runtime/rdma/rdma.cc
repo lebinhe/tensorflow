@@ -262,8 +262,11 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
     self_.lid = attr.lid;
     self_.qpn = qp_->qp_num;
     self_.psn = static_cast<uint32_t>(random::New64()) & 0xffffff;
-    CHECK(!ibv_query_gid(adapter_->context_, (uint8_t) 1, 0, &self_.gid)) 
+    union ibv_gid gid;
+    CHECK(!ibv_query_gid(adapter_->context_, (uint8_t) 1, 0, &gid)) 
         << "Query gid";
+    self_.snp = gid.global.subnet_prefix;
+    self_.iid = gid.global.interface_id;
   }
   
   // create message and ack buffers, then initialize the tables.
