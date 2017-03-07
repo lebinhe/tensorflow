@@ -320,7 +320,6 @@ void RdmaChannel::SetRemoteAddress(RdmaAddress ra, bool override) {
       remote_.psn = ra.psn;
       remote_set_ = true;
     } else {
-      //CHECK(remote_.gid == ra.gid);
       CHECK(remote_.lid == ra.lid);
       CHECK(remote_.qpn == ra.qpn);
       CHECK(remote_.psn == ra.psn);   
@@ -474,15 +473,12 @@ void RdmaChannel::Connect(RdmaAddress& remoteAddr) {
     attr.max_dest_rd_atomic = 1;
     attr.min_rnr_timer = 12;
     attr.ah_attr.is_global = 1; // Mandatory for RoCE
-
     attr.ah_attr.grh.dgid.global.subnet_prefix = remoteAddr.snp;
     attr.ah_attr.grh.dgid.global.interface_id = remoteAddr.iid;
-    // memcpy(attr.ah_attr.grh.dgid, remoteAddr.gid, sizeof(union ibv_gid));
     attr.ah_attr.grh.flow_label = 0;
     // attr.grh.sgid_index = 0; // Use the first local (source) gid
     attr.ah_attr.grh.hop_limit = 5; // 0 or 1 limits the message in L2
     // attr.grh.traffic_class = 0;
-
     attr.ah_attr.dlid = remoteAddr.lid;
     attr.ah_attr.sl = 0;
     attr.ah_attr.src_path_bits = 0;
