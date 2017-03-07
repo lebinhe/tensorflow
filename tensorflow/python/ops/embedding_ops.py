@@ -33,13 +33,21 @@ from tensorflow.python.ops import variables
 from tensorflow.python.platform import tf_logging as logging
 
 
+def _do_gather(params, ids, validate_indices=True, name=None):
+  """Deals with doing gather differently for resource variables."""
+  if isinstance(params, resource_variable_ops.ResourceVariable):
+    return params.sparse_read(ids, name=name)
+  return array_ops.gather(
+      params, ids, name=name, validate_indices=validate_indices)
+
+
 def embedding_lookup(params, ids, partition_strategy="mod", name=None,
                      validate_indices=True, max_norm=None):
   """Looks up `ids` in a list of embedding tensors.
 
   This function is used to perform parallel lookups on the list of
   tensors in `params`.  It is a generalization of
-  [`tf.gather()`](../../api_docs/python/array_ops.md#gather), where `params` is
+  @{tf.gather}, where `params` is
   interpreted as a partitioning of a large embedding tensor.  `params` may be
   a `PartitionedVariable` as returned by using `tf.get_variable()` with a
   partitioner.
@@ -63,10 +71,11 @@ def embedding_lookup(params, ids, partition_strategy="mod", name=None,
   tensor. The returned tensor has shape `shape(ids) + shape(params)[1:]`.
 
   Args:
-    params: A list of tensors with the same type and which can be concatenated
-      along dimension 0. Alternatively, a `PartitionedVariable`, created by
-      partitioning along dimension 0.  Each element must be appropriately sized
-      for the given `partition_strategy`.
+    params: A single tensor representing the complete embedding tensor,
+      or a list of P tensors all of same shape except for the first dimension,
+      representing sharded embedding tensors.  Alternatively, a
+      `PartitionedVariable`, created by partitioning along dimension 0. Each
+      element must be appropriately sized for the given `partition_strategy`.
     ids: A `Tensor` with type `int32` or `int64` containing the ids to be looked
       up in `params`.
     partition_strategy: A string specifying the partitioning strategy, relevant
@@ -99,16 +108,15 @@ def embedding_lookup(params, ids, partition_strategy="mod", name=None,
     return x
   with ops.name_scope(name, "embedding_lookup", params + [ids]) as name:
     np = len(params)  # Number of partitions
-    params = ops.convert_n_to_tensor_or_indexed_slices(params, name="params")
+    # Preserve the resource variable status to avoid accidental dense reads.
+    if not any(isinstance(p, resource_variable_ops.ResourceVariable)
+               for p in params):
+      params = ops.convert_n_to_tensor_or_indexed_slices(params, name="params")
     if np == 1:
       with ops.colocate_with(params[0]):
-        # TODO(apassos): implement the sharded version as well.
-        if isinstance(params[0], resource_variable_ops.ResourceVariable):
-          ret = params[0].sparse_read(ids, name=name)
-        else:
-          ret = array_ops.gather(params[0], ids, name=name,
-                                 validate_indices=validate_indices)
-      return maybe_normalize(ret)
+        return maybe_normalize(
+            _do_gather(
+                params[0], ids, validate_indices=validate_indices, name=name))
     else:
       ids = ops.convert_to_tensor(ids, name="ids")
       flat_ids = array_ops.reshape(ids, [-1])
@@ -136,7 +144,7 @@ def embedding_lookup(params, ids, partition_strategy="mod", name=None,
               with ops.colocate_with(params[p]):
                 dim_0_sizes.append(array_ops.shape(params[p])[0])
           num_total_ids = math_ops.reduce_sum(
-              math_ops.cast(array_ops.pack(dim_0_sizes), flat_ids.dtype))
+              math_ops.cast(array_ops.stack(dim_0_sizes), flat_ids.dtype))
         ids_per_partition = num_total_ids // np
         extras = num_total_ids % np
 
@@ -168,9 +176,9 @@ def embedding_lookup(params, ids, partition_strategy="mod", name=None,
       partitioned_result = []
       for p in xrange(np):
         with ops.colocate_with(params[p]):
-          partitioned_result.append(array_ops.gather(
-              params[p], gather_ids[p],
-              validate_indices=validate_indices))
+          partitioned_result.append(
+              _do_gather(params[p], gather_ids[p],
+                         validate_indices=validate_indices))
       # Stitch these back together
       ret = data_flow_ops.dynamic_stitch(pindices, partitioned_result,
                                          name=name)
@@ -179,15 +187,19 @@ def embedding_lookup(params, ids, partition_strategy="mod", name=None,
       for p in params[1:]:
         element_shape = element_shape.merge_with(p.get_shape()[1:])
       if element_shape.is_fully_defined():
-        ret = array_ops.reshape(ret, array_ops.concat(0, [
-            array_ops.shape(ids), element_shape]))
+        ret = array_ops.reshape(ret,
+                                array_ops.concat(
+                                    [array_ops.shape(ids), element_shape], 0))
       else:
         # It's important that we compute params[0].shape on the right device
         # to avoid data motion.
         with ops.colocate_with(params[0]):
           params_shape = array_ops.shape(params[0])
-        ret = array_ops.reshape(ret, array_ops.concat(0, [
-            array_ops.shape(ids), array_ops.slice(params_shape, [1], [-1])]))
+        ret = array_ops.reshape(ret,
+                                array_ops.concat([
+                                    array_ops.shape(ids),
+                                    array_ops.slice(params_shape, [1], [-1])
+                                ], 0))
       # output shape = ids.shape + params[*].shape[1:]
       # Normally the reshape is sufficient, but setting shape explicitly
       # teaches shape inference that params[1:].get_shape() matters.
@@ -213,7 +225,8 @@ def embedding_lookup_sparse(params, sp_ids, sp_weights,
     params: A single tensor representing the complete embedding tensor,
       or a list of P tensors all of same shape except for the first dimension,
       representing sharded embedding tensors.  Alternatively, a
-      `PartitionedVariable`, created by partitioning along dimension 0.
+      `PartitionedVariable`, created by partitioning along dimension 0. Each
+      element must be appropriately sized for the given `partition_strategy`.
     sp_ids: N x M SparseTensor of int64 ids (typically from FeatureValueToId),
       where N is typically batch size and M is arbitrary.
     sp_weights: either a SparseTensor of float / double weights, or None to
@@ -288,8 +301,8 @@ def embedding_lookup_sparse(params, sp_ids, sp_weights,
         sp_weights.values.get_shape())
     sp_ids.indices.get_shape().assert_is_compatible_with(
         sp_weights.indices.get_shape())
-    sp_ids.shape.get_shape().assert_is_compatible_with(
-        sp_weights.shape.get_shape())
+    sp_ids.dense_shape.get_shape().assert_is_compatible_with(
+        sp_weights.dense_shape.get_shape())
     # TODO(yleon): Add enhanced node assertions to verify that sp_ids and
     # sp_weights have equal indices and shapes.
 
@@ -315,8 +328,8 @@ def embedding_lookup_sparse(params, sp_ids, sp_weights,
       # Reshape weights to allow broadcast
       ones = array_ops.fill(
           array_ops.expand_dims(array_ops.rank(embeddings) - 1, 0), 1)
-      bcast_weights_shape = array_ops.concat(0, [
-          array_ops.shape(weights), ones])
+      bcast_weights_shape = array_ops.concat([array_ops.shape(weights), ones],
+                                             0)
 
       orig_weights_shape = weights.get_shape()
       weights = array_ops.reshape(weights, bcast_weights_shape)

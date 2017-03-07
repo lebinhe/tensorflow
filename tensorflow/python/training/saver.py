@@ -36,7 +36,6 @@ from tensorflow.python.client import session
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import device as pydev
 from tensorflow.python.framework import errors
-from tensorflow.python.framework import graph_util
 from tensorflow.python.framework import meta_graph
 from tensorflow.python.framework import ops
 from tensorflow.python.lib.io import file_io
@@ -44,6 +43,7 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import gen_io_ops
 from tensorflow.python.ops import io_ops
+from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.ops import state_ops
 from tensorflow.python.ops import string_ops
 from tensorflow.python.ops import variables
@@ -52,6 +52,31 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import training_util
 from tensorflow.python.training.checkpoint_state_pb2 import CheckpointState
 from tensorflow.python.util import compat
+
+
+# Op names which identify variable reads which should be saved.
+_VARIABLE_OPS = set(["Variable",
+                     "VariableV2",
+                     "AutoReloadVariable",
+                     "VarHandleOp",
+                     "ReadVariableOp"])
+
+
+def _set_cpu0(device_string):
+  """Creates a new device string based on `device_string` but using /CPU:0.
+
+  If the device is already on /CPU:0, this is a no-op.
+
+  Args:
+    device_string: A device string.
+
+  Returns:
+    A device string.
+  """
+  parsed_device = pydev.DeviceSpec.from_string(device_string)
+  parsed_device.device_type = "CPU"
+  parsed_device.device_index = 0
+  return parsed_device.to_string()
 
 
 class BaseSaverBuilder(object):
@@ -129,6 +154,29 @@ class BaseSaverBuilder(object):
           validate_shape=restored_shapes is None and
           self.op.get_shape().is_fully_defined())
 
+  class ResourceVariableSaveable(SaveableObject):
+    """SaveableObject implementation that handles ResourceVariables."""
+
+    def __init__(self, var, slice_spec, name):
+      if isinstance(var, ops.Tensor):
+        self.handle_op = var.op.inputs[0]
+      elif isinstance(var, resource_variable_ops.ResourceVariable):
+        self.handle_op = var.handle
+      else:
+        raise ValueError(
+            "Saveable is neither a resource variable nor a read operation."
+            " Got: %s" % repr(var))
+      spec = BaseSaverBuilder.SaveSpec(var, slice_spec, name)
+      super(BaseSaverBuilder.ResourceVariableSaveable, self).__init__(
+          var, [spec], name)
+
+    def restore(self, restored_tensors, restored_shapes):
+      restored_tensor = restored_tensors[0]
+      if restored_shapes is not None:
+        restored_tensor = array_ops.reshape(restored_tensor, restored_shapes[0])
+      return resource_variable_ops.assign_variable_op(
+          self.handle_op, restored_tensor)
+
   def __init__(self, write_version=saver_pb2.SaverDef.V2):
     self._write_version = write_version
 
@@ -158,7 +206,6 @@ class BaseSaverBuilder(object):
         tensor_names.append(spec.name)
         tensors.append(spec.tensor)
         tensor_slices.append(spec.slice_spec)
-
     if self._write_version == saver_pb2.SaverDef.V1:
       return io_ops._save(
           filename=filename_tensor,
@@ -355,8 +402,7 @@ class BaseSaverBuilder(object):
       # available on the GPU.
       # TODO(touts): Re-enable restore on GPU when we can support annotating
       # string tensors as "HostMemory" inputs.
-      with ops.device(
-          graph_util.set_cpu0(saveable.device) if saveable.device else None):
+      with ops.device(_set_cpu0(saveable.device) if saveable.device else None):
         with ops.control_dependencies(restore_control_inputs):
           tensors = self.restore_op(filename_tensor, saveable, preferred_shard)
           shapes = None
@@ -406,8 +452,7 @@ class BaseSaverBuilder(object):
 
   @staticmethod
   def _IsVariable(v):
-    return isinstance(v, ops.Tensor) and (v.op.type == "Variable" or
-                                          v.op.type == "AutoReloadVariable")
+    return isinstance(v, ops.Tensor) and v.op.type in _VARIABLE_OPS
 
   def _GroupByDevices(self, saveables):
     """Group Variable tensor slices per device.
@@ -461,7 +506,14 @@ class BaseSaverBuilder(object):
     for var in op_list:
       if isinstance(var, BaseSaverBuilder.SaveableObject):
         names_to_saveables[var.name] = var
-      elif isinstance(var, variables.Variable) and var._save_slice_info:
+      elif isinstance(var, variables.PartitionedVariable):
+        if var.name in names_to_saveables:
+          raise ValueError("At least two variables have the same name: %s" %
+                           var.name)
+        names_to_saveables[var.name] = var
+      elif ((isinstance(var, variables.Variable) or
+             isinstance(var, resource_variable_ops.ResourceVariable)) and
+            var._save_slice_info):
         name = var._save_slice_info.full_name
         if name in names_to_saveables:
           if not isinstance(names_to_saveables[name], list):
@@ -471,10 +523,13 @@ class BaseSaverBuilder(object):
         else:
           names_to_saveables[name] = [var]
       else:
-        var = ops.convert_to_tensor(var, as_ref=True)
+        var = ops.internal_convert_to_tensor(var, as_ref=True)
         if not BaseSaverBuilder._IsVariable(var):
           raise TypeError("Variable to save is not a Variable: %s" % var)
-        name = var.op.name
+        if var.op.type == "ReadVariableOp":
+          name = var.op.inputs[0].op.name
+        else:
+          name = var.op.name
         if name in names_to_saveables:
           raise ValueError("At least two variables have the same name: %s" %
                            name)
@@ -511,12 +566,15 @@ class BaseSaverBuilder(object):
       op = names_to_saveables[name]
       if isinstance(op, BaseSaverBuilder.SaveableObject):
         self._AddSaveable(saveables, seen_ops, op)
-      elif isinstance(op, (list, tuple)):
+      elif isinstance(op, (list, tuple, variables.PartitionedVariable)):
+        if isinstance(op, variables.PartitionedVariable):
+          op = list(op)
         # A set of slices.
         slice_name = None
         # pylint: disable=protected-access
         for variable in op:
-          if not isinstance(variable, variables.Variable):
+          if (not isinstance(variable, variables.Variable) and
+              not isinstance(variable, resource_variable_ops.ResourceVariable)):
             raise ValueError("Slices must all be Variables: %s" % variable)
           if not variable._save_slice_info:
             raise ValueError("Slices must all be slices: %s" % variable)
@@ -526,18 +584,27 @@ class BaseSaverBuilder(object):
             raise ValueError(
                 "Slices must all be from the same tensor: %s != %s" %
                 (slice_name, variable._save_slice_info.full_name))
-          saveable = BaseSaverBuilder.VariableSaveable(
-              variable, variable._save_slice_info.spec, name)
+          if variable.op.type in ["Variable", "VariableV2",
+                                  "AutoReloadVariable"]:
+            saveable = BaseSaverBuilder.VariableSaveable(
+                variable, variable._save_slice_info.spec, name)
+          else:
+            saveable = BaseSaverBuilder.ResourceVariableSaveable(
+                variable, variable._save_slice_info.spec, name)
           self._AddSaveable(saveables, seen_ops, saveable)
         # pylint: enable=protected-access
       else:
         # A variable or tensor.
-        variable = ops.convert_to_tensor(op, as_ref=True)
+        variable = ops.internal_convert_to_tensor(op, as_ref=True)
         if not BaseSaverBuilder._IsVariable(variable):
           raise TypeError("names_to_saveables must be a dict mapping string "
                           "names to Tensors/Variables. Not a variable: %s" %
                           variable)
-        saveable = BaseSaverBuilder.VariableSaveable(variable, "", name)
+        if variable.op.type in ["Variable", "VariableV2", "AutoReloadVariable"]:
+          saveable = BaseSaverBuilder.VariableSaveable(variable, "", name)
+        else:
+          saveable = BaseSaverBuilder.ResourceVariableSaveable(
+              variable, "", name)
         self._AddSaveable(saveables, seen_ops, saveable)
     return saveables
 
@@ -772,7 +839,7 @@ def get_checkpoint_state(checkpoint_dir, latest_filename=None):
     # many lines of errors from colossus in the logs.
     if file_io.file_exists(coord_checkpoint_filename):
       file_content = file_io.read_file_to_string(
-          coord_checkpoint_filename).decode("utf-8")
+          coord_checkpoint_filename)
       ckpt = CheckpointState()
       text_format.Merge(file_content, ckpt)
       if not ckpt.model_checkpoint_path:
@@ -805,7 +872,7 @@ def get_checkpoint_state(checkpoint_dir, latest_filename=None):
 class Saver(object):
   """Saves and restores variables.
 
-  See [Variables](../../how_tos/variables/index.md)
+  See @{$variables$Variables}
   for an overview of variables, saving and restoring.
 
   The `Saver` class adds ops to save and restore variables to and from
@@ -874,17 +941,6 @@ class Saver(object):
 
   If you create several savers, you can specify a different filename for the
   protocol buffer file in the call to `save()`.
-
-  @@__init__
-  @@save
-  @@restore
-
-  Other utility methods.
-
-  @@last_checkpoints
-  @@set_last_checkpoints_with_time
-  @@recover_last_checkpoints
-  @@as_saver_def
   """
 
   def __init__(self,
@@ -1156,11 +1212,23 @@ class Saver(object):
     Returns:
       A `SaverDef` protocol buffer.
     """
-    if (export_scope is None or
-        self._name.startswith(export_scope)):
+    if export_scope is None:
       return self.saver_def
-    else:
+
+    if not (self.saver_def.filename_tensor_name.startswith(export_scope) and
+            self.saver_def.save_tensor_name.startswith(export_scope) and
+            self.saver_def.restore_op_name.startswith(export_scope)):
       return None
+
+    saver_def = saver_pb2.SaverDef()
+    saver_def.CopyFrom(self.saver_def)
+    saver_def.filename_tensor_name = ops.strip_name_scope(
+        saver_def.filename_tensor_name, export_scope)
+    saver_def.save_tensor_name = ops.strip_name_scope(
+        saver_def.save_tensor_name, export_scope)
+    saver_def.restore_op_name = ops.strip_name_scope(
+        saver_def.restore_op_name, export_scope)
+    return saver_def
 
   @staticmethod
   def from_proto(saver_def, import_scope=None):
@@ -1384,6 +1452,7 @@ class Saver(object):
     """
     if self._is_empty:
       return
+    logging.info("Restoring parameters from %s", save_path)
     sess.run(self.saver_def.restore_op_name,
              {self.saver_def.filename_tensor_name: save_path})
 

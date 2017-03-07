@@ -39,14 +39,16 @@ summary: "No. Op."
 `,
 			wanted: `
 // No. Op.
-func NoOp(scope *Scope) {
+//
+// Returns the created operation.
+func NoOp(scope *Scope) (o *tf.Operation) {
 	if scope.Err() != nil {
 		return
 	}
 	opspec := tf.OpSpec{
 		Type: "NoOp",
 	}
-	scope.AddOperation(opspec)
+	return scope.AddOperation(opspec)
 }
 `,
 		},
@@ -188,7 +190,7 @@ type DecodeJpegAttr func(optionalAttr)
 //
 // value: Number of color channels for the decoded image.
 // If not specified, defaults to i:0
-func DecodeJpegChannels(value int) DecodeJpegAttr {
+func DecodeJpegChannels(value int64) DecodeJpegAttr {
 	return func(m optionalAttr) {
 		m["channels"] = value
 	}
