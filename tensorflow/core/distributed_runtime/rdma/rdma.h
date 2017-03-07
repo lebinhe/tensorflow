@@ -27,7 +27,8 @@ struct RdmaAddress {
       uint32_t lid;
       uint32_t qpn;
       uint32_t psn;
-      ibv_gid gid;
+      uint64_t snp; // subnet prefix
+      uint64_t iid; // interface id
 };
 // structure to save information for remote memory regions.
 struct RemoteMR{
