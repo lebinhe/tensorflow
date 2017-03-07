@@ -524,7 +524,9 @@ class GrpcWorkerService : public AsyncServiceInterface {
     ra.lid = call->request.channel().lid();
     ra.qpn = call->request.channel().qpn();
     ra.psn = call->request.channel().psn();
-    ra.gid = call->request.channel().gid();
+    //ra.gid = reinterpret_cast<unsigned char*>call->request.channel().gid();
+    unsigned char* temp_char = reinterpret_cast<unsigned char*> (call->request.channel().gid());
+    memcpy(ra.gid, temp_char, 8*sizeof(unsigned char));
     rc->SetRemoteAddress(ra, false);
     rc->Connect();
     int i = 0;

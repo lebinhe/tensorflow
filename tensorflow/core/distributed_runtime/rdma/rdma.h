@@ -27,7 +27,7 @@ struct RdmaAddress {
       uint32_t lid;
       uint32_t qpn;
       uint32_t psn;
-      unsigned char[8] gid; // union ibv_gid gid;
+      unsigned char gid[8]; // union ibv_gid gid;
 };
 // structure to save information for remote memory regions.
 struct RemoteMR{
