@@ -313,14 +313,14 @@ RdmaChannel::~RdmaChannel() {
 void RdmaChannel::SetRemoteAddress(RdmaAddress ra, bool override) {
     mu_.lock();
     if ((override) || (!remote_set_)) { 
-      memcpy(remote_.gid, ra.gid, sizeof(union ibv_gid));
+      remote_.snp = ra.snp;
+      remote_.iid = ra.iid;
       remote_.lid = ra.lid;
       remote_.qpn = ra.qpn;
       remote_.psn = ra.psn;
       remote_set_ = true;
     } else {
       //CHECK(remote_.gid == ra.gid);
-      //strcmp()
       CHECK(remote_.lid == ra.lid);
       CHECK(remote_.qpn == ra.qpn);
       CHECK(remote_.psn == ra.psn);   
