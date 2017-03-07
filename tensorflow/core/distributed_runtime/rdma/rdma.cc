@@ -476,7 +476,7 @@ void RdmaChannel::Connect(RdmaAddress& remoteAddr) {
     attr.min_rnr_timer = 12;
     attr.ah_attr.is_global = 1; // Mandatory for RoCE
 
-    attr.ah_attr.grh.dgid = reinterpret_cast<union ibv_gid>remoteAddr.gid;
+    attr.ah_attr.grh.dgid = reinterpret_cast<union ibv_gid>(remoteAddr.gid);
     attr.ah_attr.grh.flow_label = 0;
     // attr.grh.sgid_index = 0; // Use the first local (source) gid
     attr.ah_attr.grh.hop_limit = 5; // 0 or 1 limits the message in L2

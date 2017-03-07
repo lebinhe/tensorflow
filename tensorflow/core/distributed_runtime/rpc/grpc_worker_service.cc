@@ -554,7 +554,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
     channel_info->set_lid(rc->self().lid);
     channel_info->set_qpn(rc->self().qpn);
     channel_info->set_psn(rc->self().psn);
-    channel_info->set_gid(rc->self().gid);
+    channel_info->set_gid(reinterpret_cast<std::basic_string<char>>(rc->self().gid));
     for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
       MemoryRegion* mr = call->response.add_mr();
       mr->set_remote_addr(reinterpret_cast<uint64>(mb[i]->buffer()));
