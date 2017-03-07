@@ -75,8 +75,8 @@ void RdmaMgr::SetupChannels() {
         ra.lid = call->resp.channel().lid();
         ra.qpn = call->resp.channel().qpn(); 
         ra.psn = call->resp.channel().psn();
-        ra.snp = call->request.channel().snp();
-        ra.iid = call->request.channel().iid();
+        ra.snp = call->resp.channel().snp();
+        ra.iid = call->resp.channel().iid();
         rc->SetRemoteAddress(ra, false);
         rc->Connect();
         int i = 0;
