@@ -328,11 +328,21 @@ message TracingResponse {
 //
 ////////////////////////////////////////////////////////////////////////////////
 
+message GIDGlobal {
+  uint64 subnet_prefix = 1;
+  uint64 interface_id = 2;
+}
+
+message GID {
+  repeated uint8 raw = 1;
+  GIDGlobal global = 2;
+}
+
 message Channel {
   int32 lid = 1;
   int32 qpn = 2;
   int32 psn = 3;
-  bytes gid = 4;
+  GID gid = 4;
 }
 
 message MemoryRegion {

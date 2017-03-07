@@ -262,12 +262,8 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
     self_.lid = attr.lid;
     self_.qpn = qp_->qp_num;
     self_.psn = static_cast<uint32_t>(random::New64()) & 0xffffff;
-    
-    union ibv_gid gid; 
-    CHECK(!ibv_query_gid(adapter_->context_, (uint8_t) 1, 0, &gid)) 
+    CHECK(!ibv_query_gid(adapter_->context_, (uint8_t) 1, 0, &self_.gid)) 
         << "Query gid";
-    unsigned char* gid_bytes = reinterpret_cast<unsigned char*>(&gid);
-    memcpy(self_.gid, gid_bytes, 8 * sizeof(unsigned char));
   }
   
   // create message and ack buffers, then initialize the tables.
@@ -314,7 +310,7 @@ RdmaChannel::~RdmaChannel() {
 void RdmaChannel::SetRemoteAddress(RdmaAddress ra, bool override) {
     mu_.lock();
     if ((override) || (!remote_set_)) { 
-      memcpy(remote_.gid, ra.gid, 8*sizeof(unsigned char));
+      memcpy(remote_.gid, ra.gid, sizeof(union ibv_gid));
       remote_.lid = ra.lid;
       remote_.qpn = ra.qpn;
       remote_.psn = ra.psn;
@@ -476,7 +472,8 @@ void RdmaChannel::Connect(RdmaAddress& remoteAddr) {
     attr.min_rnr_timer = 12;
     attr.ah_attr.is_global = 1; // Mandatory for RoCE
 
-    attr.ah_attr.grh.dgid = reinterpret_cast<union ibv_gid>(remoteAddr.gid);
+    // attr.ah_attr.grh.dgid = remoteAddr.gid;
+    memcpy(attr.ah_attr.grh.dgid, remoteAddr.gid, sizeof(union ibv_gid));
     attr.ah_attr.grh.flow_label = 0;
     // attr.grh.sgid_index = 0; // Use the first local (source) gid
     attr.ah_attr.grh.hop_limit = 5; // 0 or 1 limits the message in L2

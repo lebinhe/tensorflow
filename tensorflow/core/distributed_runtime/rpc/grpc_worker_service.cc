@@ -524,9 +524,12 @@ class GrpcWorkerService : public AsyncServiceInterface {
     ra.lid = call->request.channel().lid();
     ra.qpn = call->request.channel().qpn();
     ra.psn = call->request.channel().psn();
-    //ra.gid = reinterpret_cast<unsigned char*>call->request.channel().gid();
-    unsigned char* temp_char = reinterpret_cast<unsigned char*> (call->request.channel().gid());
-    memcpy(ra.gid, temp_char, 8*sizeof(unsigned char));
+    // manual deep copy
+    ra.gid.raw = call->request.channel().gid().raw();
+    ra.gid.global.subnet_prefix = call->request.channel().gid().global().subnet_prefix();
+    ra.gid.global.subnet_prefix = call->request.channel().gid().global().interface_id();
+
+    // memcpy(ra.gid, temp_char, 8*sizeof(unsigned char));
     rc->SetRemoteAddress(ra, false);
     rc->Connect();
     int i = 0;
@@ -554,7 +557,8 @@ class GrpcWorkerService : public AsyncServiceInterface {
     channel_info->set_lid(rc->self().lid);
     channel_info->set_qpn(rc->self().qpn);
     channel_info->set_psn(rc->self().psn);
-    channel_info->set_gid(reinterpret_cast<std::basic_string<char>>(rc->self().gid));
+    //channel_info->set_gid(reinterpret_cast<std::basic_string<char>>(rc->self().gid));
+    channel_info->set_gid(rc->self().gid);
     for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
       MemoryRegion* mr = call->response.add_mr();
       mr->set_remote_addr(reinterpret_cast<uint64>(mb[i]->buffer()));
