@@ -525,10 +525,10 @@ class GrpcWorkerService : public AsyncServiceInterface {
     ra.qpn = call->request.channel().qpn();
     ra.psn = call->request.channel().psn();
     // manual deep copy
-    ra.gid.raw = call->request.channel().gid().raw();
+    // ra.gid.raw = call->request.channel().gid().raw();
     ra.gid.global.subnet_prefix = call->request.channel().gid().global().subnet_prefix();
-    ra.gid.global.subnet_prefix = call->request.channel().gid().global().interface_id();
-
+    ra.gid.global.interface_id = call->request.channel().gid().global().interface_id();
+    
     // memcpy(ra.gid, temp_char, 8*sizeof(unsigned char));
     rc->SetRemoteAddress(ra, false);
     rc->Connect();

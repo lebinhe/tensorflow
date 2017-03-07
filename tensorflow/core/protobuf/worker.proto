@@ -328,14 +328,9 @@ message TracingResponse {
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-message GIDGlobal {
+message GID {
   uint64 subnet_prefix = 1;
   uint64 interface_id = 2;
-}
-
-message GID {
-  repeated uint8 raw = 1;
-  GIDGlobal global = 2;
 }
 
 message Channel {
