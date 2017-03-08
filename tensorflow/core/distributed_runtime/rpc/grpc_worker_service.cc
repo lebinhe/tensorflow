@@ -389,7 +389,7 @@ void GrpcWorker::RecvTensorAsync(CallOptions* opts,
   // of execution of the callback lambda body below, an RPC
   // cancellation should abort the rendezvous.
   opts->SetCancelCallback([this, step_id]() { AbortStep(step_id); });
-  worker_->env()->rendezvous_mgr->RecvLocalAsync(
+  env_->rendezvous_mgr->RecvLocalAsync(
       step_id, parsed,
       [opts, response, done, src_dev](const Status& status,
                                       const Rendezvous::Args& send_args,
