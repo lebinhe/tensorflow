@@ -279,7 +279,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
 
   void GetRemoteAddressHandler(WorkerCall<GetRemoteAddressRequest,
                                  GetRemoteAddressResponse>* call) {
-    env_->compute_pool->Schedule([this, call]() {
+    worker_->env()->compute_pool->Schedule([this, call]() {
       DoGetRemoteAddress(call);
     });
     ENQUEUE_REQUEST(GetRemoteAddress, false);
