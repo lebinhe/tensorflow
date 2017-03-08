@@ -7,6 +7,7 @@ load("//tensorflow:tensorflow.bzl", "if_not_mobile")
 # configure may change the following lines
 WITH_GCP_SUPPORT = False
 WITH_HDFS_SUPPORT = False
+WITH_XLA_SUPPORT = False
 WITH_RDMA_SUPPORT = True
 WITH_JEMALLOC = True
 

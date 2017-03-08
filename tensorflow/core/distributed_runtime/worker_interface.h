@@ -140,6 +140,11 @@ class WorkerInterface {
   Status Tracing(const TracingRequest* request, TracingResponse* response) {
     return CallAndWait(&ME::TracingAsync, request, response);
   }
+    
+  Status GetRemoteAddress(const GetRemoteAddressRequest* request, 
+                          GetRemoteAddressResponse* response) {
+    return CallAndWait(&ME::GetRemoteAddressAsync, request, response);
+  }
 
  protected:
   // Instances of WorkerInterface must be deleted by a call to
