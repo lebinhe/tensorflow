@@ -306,7 +306,7 @@ private:
     // analyzing request
     // the channel setting part is redundant.
     string remote_host_name = call->request.host_name();
-    RdmaChannel* rc = env_->rdma_mgr->FindChannel(remote_host_name);
+    RdmaChannel* rc = worker_->env()->rdma_mgr->FindChannel(remote_host_name);
     RdmaAddress ra;
     ra.lid = call->request.channel().lid();
     ra.qpn = call->request.channel().qpn();
@@ -339,7 +339,7 @@ private:
     CHECK(i == RdmaChannel::kNumMessageBuffers);
 
     // setting up response
-    call->response.set_host_name(env_->worker_name);
+    call->response.set_host_name(worker_->env()->worker_name);
     Channel* channel_info = call->response.mutable_channel();
     channel_info->set_lid(rc->self().lid);
     channel_info->set_qpn(rc->self().qpn);
@@ -389,7 +389,7 @@ void GrpcWorker::RecvTensorAsync(CallOptions* opts,
   // of execution of the callback lambda body below, an RPC
   // cancellation should abort the rendezvous.
   opts->SetCancelCallback([this, step_id]() { AbortStep(step_id); });
-  env_->rendezvous_mgr->RecvLocalAsync(
+  worker_->env()->rendezvous_mgr->RecvLocalAsync(
       step_id, parsed,
       [opts, response, done, src_dev](const Status& status,
                                       const Rendezvous::Args& send_args,
