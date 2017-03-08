@@ -144,7 +144,7 @@ class WorkerInterface {
  protected:
   // Instances of WorkerInterface must be deleted by a call to
   // WorkerCacheInterface::ReleaseWorker().
-  virtual ~WorkerInterface() {}
+  virtual ~WorkerInterface() {};
   friend class WorkerCacheInterface;
 
   // NOTE: This should only be called by implementations of this
