@@ -67,7 +67,7 @@ void RdmaMgr::SetupChannels() {
       mr->set_rkey(rc->message_buffers_[i]->self_->rkey);
     }
     // callback once the grpc call is completed.
-    auto cb = [this, worker_name, rc, call, wi, &n, &mu, 
+    auto cb = [this, worker_name, worker_cache, rc, call, wi, &n, &mu, 
                &counter](const Status& s) {
       if (s.ok()) {
         CHECK(worker_name.compare(call->resp.host_name())==0);
