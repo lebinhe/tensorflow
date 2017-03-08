@@ -286,6 +286,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
   }
 #undef ENQUEUE_REQUEST
 
+private:
   void EnqueueRecvTensorRequestRaw() {
     mutex_lock l(shutdown_mu_);
     if (!is_shutdown_) {
@@ -297,6 +298,62 @@ class GrpcWorkerService : public AsyncServiceInterface {
               &GrpcWorkerService::RecvTensorHandlerRaw,
               true /* supports cancel*/);
     }
+  }
+    
+  void DoGetRemoteAddress(WorkerCall<GetRemoteAddressRequest,
+                                 GetRemoteAddressResponse>* call) {
+#ifdef USE_RDMA
+    // analyzing request
+    // the channel setting part is redundant.
+    string remote_host_name = call->request.host_name();
+    RdmaChannel* rc = env_->rdma_mgr->FindChannel(remote_host_name);
+    RdmaAddress ra;
+    ra.lid = call->request.channel().lid();
+    ra.qpn = call->request.channel().qpn();
+    ra.psn = call->request.channel().psn();
+    // manual deep copy
+    // ra.gid.raw = call->request.channel().gid().raw();
+    ra.snp = call->request.channel().snp();
+    ra.iid = call->request.channel().iid();
+
+    // memcpy(ra.gid, temp_char, 8*sizeof(unsigned char));
+    rc->SetRemoteAddress(ra, false);
+    rc->Connect();
+    int i = 0;
+    int idx[] = {1, 0, 3, 2};
+    std::vector<RdmaBuffer*> mb(rc->message_buffers());
+    for (const auto& mr : call->request.mr()) {
+      // the connections are crossed, i.e.
+      // local tx_message_buffer <---> remote rx_message_buffer_
+      // local rx_message_buffer <---> remote tx_message_buffer_
+      // local tx_ack_buffer <---> remote rx_ack_buffer_
+      // local rx_ack_buffer <---> remote tx_ack_buffer_
+      // hence idx[] = {1, 0, 3, 2}.
+      RdmaBuffer* rb = mb[idx[i]];
+      RemoteMR rmr;
+      rmr.remote_addr = mr.remote_addr();
+      rmr.rkey = mr.rkey();
+      rb->SetRemoteMR(rmr, false);
+      i++;
+    }
+    CHECK(i == RdmaChannel::kNumMessageBuffers);
+
+    // setting up response
+    call->response.set_host_name(env_->worker_name);
+    Channel* channel_info = call->response.mutable_channel();
+    channel_info->set_lid(rc->self().lid);
+    channel_info->set_qpn(rc->self().qpn);
+    channel_info->set_psn(rc->self().psn);
+    //channel_info->set_gid(reinterpret_cast<std::basic_string<char>>(rc->self().gid));
+    channel_info->set_snp(rc->self().snp);
+    channel_info->set_iid(rc->self().iid);
+    for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
+      MemoryRegion* mr = call->response.add_mr();
+      mr->set_remote_addr(reinterpret_cast<uint64>(mb[i]->buffer()));
+      mr->set_rkey(mb[i]->self()->rkey);
+    }
+    call->SendResponse(::grpc::Status::OK);
+#endif
   }
 
   TF_DISALLOW_COPY_AND_ASSIGN(GrpcWorkerService);
@@ -393,62 +450,6 @@ void GrpcWorker::RecvTensorAsync(CallOptions* opts,
       });
   }
 
-  void DoGetRemoteAddress(WorkerCall<GetRemoteAddressRequest,
-                                 GetRemoteAddressResponse>* call) {
-#ifdef USE_RDMA
-    // analyzing request
-    // the channel setting part is redundant.
-    string remote_host_name = call->request.host_name();
-    RdmaChannel* rc = env_->rdma_mgr->FindChannel(remote_host_name);
-    RdmaAddress ra;
-    ra.lid = call->request.channel().lid();
-    ra.qpn = call->request.channel().qpn();
-    ra.psn = call->request.channel().psn();
-    // manual deep copy
-    // ra.gid.raw = call->request.channel().gid().raw();
-    ra.snp = call->request.channel().snp();
-    ra.iid = call->request.channel().iid();
-
-    // memcpy(ra.gid, temp_char, 8*sizeof(unsigned char));
-    rc->SetRemoteAddress(ra, false);
-    rc->Connect();
-    int i = 0;
-    int idx[] = {1, 0, 3, 2};
-    std::vector<RdmaBuffer*> mb(rc->message_buffers());
-    for (const auto& mr : call->request.mr()) {
-      // the connections are crossed, i.e.
-      // local tx_message_buffer <---> remote rx_message_buffer_
-      // local rx_message_buffer <---> remote tx_message_buffer_
-      // local tx_ack_buffer <---> remote rx_ack_buffer_
-      // local rx_ack_buffer <---> remote tx_ack_buffer_
-      // hence idx[] = {1, 0, 3, 2}.
-      RdmaBuffer* rb = mb[idx[i]];
-      RemoteMR rmr;
-      rmr.remote_addr = mr.remote_addr();
-      rmr.rkey = mr.rkey();
-      rb->SetRemoteMR(rmr, false);
-      i++;
-    }
-    CHECK(i == RdmaChannel::kNumMessageBuffers);
-
-    // setting up response
-    call->response.set_host_name(env_->worker_name);
-    Channel* channel_info = call->response.mutable_channel();
-    channel_info->set_lid(rc->self().lid);
-    channel_info->set_qpn(rc->self().qpn);
-    channel_info->set_psn(rc->self().psn);
-    //channel_info->set_gid(reinterpret_cast<std::basic_string<char>>(rc->self().gid));
-    channel_info->set_snp(rc->self().snp);
-    channel_info->set_iid(rc->self().iid);
-    for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
-      MemoryRegion* mr = call->response.add_mr();
-      mr->set_remote_addr(reinterpret_cast<uint64>(mb[i]->buffer()));
-      mr->set_rkey(mb[i]->self()->rkey);
-    }
-    call->SendResponse(::grpc::Status::OK);
-#endif
-  }
-
   TF_DISALLOW_COPY_AND_ASSIGN(GrpcWorkerService);
 
   WorkerEnv* GrpcWorker::env() { return env_; }
@@ -458,6 +459,6 @@ void GrpcWorker::RecvTensorAsync(CallOptions* opts,
   AsyncServiceInterface* NewGrpcWorkerService(GrpcWorker* worker,
                                               ::grpc::ServerBuilder* builder) {
     return new GrpcWorkerService(worker, builder);
-}
+  }
 
 }  // namespace tensorflow
