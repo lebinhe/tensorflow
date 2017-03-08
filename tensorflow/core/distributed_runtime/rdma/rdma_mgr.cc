@@ -100,7 +100,9 @@ void RdmaMgr::SetupChannels() {
         LOG(ERROR) << s.error_message();
       }
       delete call;
-      delete wi;
+      // Instances of WorkerInterface must be deleted by a call to
+      // WorkerCacheInterface::ReleaseWorker(const string& target, WorkerInterface* worker).
+      worker_cache->ReleaseWorker(worker_name, wi); // delete worker interface;
       mu.lock();
       counter ++;
       if (counter == num_remote_workers_) {
