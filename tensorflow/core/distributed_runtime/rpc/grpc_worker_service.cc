@@ -450,8 +450,6 @@ void GrpcWorker::RecvTensorAsync(CallOptions* opts,
       });
   }
 
-  TF_DISALLOW_COPY_AND_ASSIGN(GrpcWorkerService);
-
   WorkerEnv* GrpcWorker::env() { return env_; }
 
   GrpcWorker* NewGrpcWorker(WorkerEnv* env) { return new GrpcWorker(env); }
@@ -460,5 +458,4 @@ void GrpcWorker::RecvTensorAsync(CallOptions* opts,
                                               ::grpc::ServerBuilder* builder) {
     return new GrpcWorkerService(worker, builder);
   }
-
 }  // namespace tensorflow
