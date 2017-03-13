@@ -109,7 +109,7 @@ void RdmaMgr::SetupChannels() {
         n.Notify();
       }
       mu.unlock();   
-    };     
+    };
     wi->GetRemoteAddressAsync(&call->req, &call->resp, cb);
   }
   n.WaitForNotification();
