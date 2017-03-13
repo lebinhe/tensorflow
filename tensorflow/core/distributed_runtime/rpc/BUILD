@@ -84,7 +84,6 @@ cc_library(
         ":grpc_client_cq_tag",
         ":grpc_util",
         ":grpc_worker_service_impl",
-        ":graph_mgr",
         ":rendezvous_mgr_interface",
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:lib",
