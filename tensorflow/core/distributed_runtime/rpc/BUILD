@@ -91,11 +91,7 @@ cc_library(
         "//tensorflow/core/distributed_runtime:worker_cache_logger",
         "//tensorflow/core/distributed_runtime:worker_interface",
         "@grpc//:grpc++_unsecure",
-    ] + tf_rdma_lib_deps(),
-    copts = select({
-        ":using_rdma": ["-DUSE_RDMA"],
-        "//conditions:default": []}),
-    alwayslink = 1,
+    ],
 )
 
 cc_library(

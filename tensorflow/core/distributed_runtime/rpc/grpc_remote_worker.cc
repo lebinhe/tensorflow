@@ -23,10 +23,6 @@ limitations under the License.
 #include "tensorflow/core/distributed_runtime/tensor_coding.h"
 #include "tensorflow/core/distributed_runtime/worker_cache_logger.h"
 #include "tensorflow/core/distributed_runtime/worker_interface.h"
-#include "tensorflow/core/distributed_runtime/rendezvous_mgr_interface.h"
-#ifdef USE_RDMA
-#include "tensorflow/core/distributed_runtime/rdma/rdma_mgr.h"
-#endif
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/strings/str_util.h"
@@ -184,55 +180,7 @@ class GrpcRemoteWorker : public WorkerInterface {
   void GetRemoteAddressAsync(const GetRemoteAddressRequest* request,
                     GetRemoteAddressResponse* response,
                     StatusCallback done) override {
-  #ifdef USE_RDMA
-    // analyzing request
-    // the channel setting part is redundant.
-    string remote_host_name = request->host_name();
-    RdmaChannel* rc = env_->rdma_mgr->FindChannel(remote_host_name);
-    RdmaAddress ra;
-    ra.lid = request->channel().lid();
-    ra.qpn = request->channel().qpn(); 
-    ra.psn = request->channel().psn();
-    ra.snp = request->channel().snp();
-    ra.iid = request->channel().iid();
-    rc->SetRemoteAddress(ra, false);
-    rc->Connect();
-    int i = 0;
-    int idx[] = {1, 0, 3, 2};
-    std::vector<RdmaBuffer*> mb(rc->message_buffers());
-    for (const auto& mr : request->mr()) {
-      // the connections are crossed, i.e.
-      // local tx_message_buffer <---> remote rx_message_buffer_
-      // local rx_message_buffer <---> remote tx_message_buffer_
-      // local tx_ack_buffer <---> remote rx_ack_buffer_
-      // local rx_ack_buffer <---> remote tx_ack_buffer_
-      // hence idx[] = {1, 0, 3, 2}.
-      RdmaBuffer* rb = mb[idx[i]];
-      RemoteMR rmr;
-      rmr.remote_addr = mr.remote_addr();
-      rmr.rkey = mr.rkey();
-      rb->SetRemoteMR(rmr, false);
-      i++;
-    }
-    CHECK(i == RdmaChannel::kNumMessageBuffers);
-
-    // setting up response
-    response->set_host_name(env_->worker_name);
-    Channel* channel_info = response->mutable_channel();
-    channel_info->set_lid(rc->self().lid);
-    channel_info->set_qpn(rc->self().qpn);
-    channel_info->set_psn(rc->self().psn);
-    channel_info->set_snp(rc->self().snp);
-    channel_info->set_iid(rc->self().iid);
-    for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
-      MemoryRegion* mr = response->add_mr();
-      mr->set_remote_addr(reinterpret_cast<uint64>(mb[i]->buffer()));
-      mr->set_rkey(mb[i]->self()->rkey);
-    }
-    done(Status::OK());
-#else
     IssueRequest(request, response, getremoteaddress_, done);
-#endif
   }
 
  private:
