@@ -23,6 +23,10 @@ limitations under the License.
 #include "tensorflow/core/distributed_runtime/tensor_coding.h"
 #include "tensorflow/core/distributed_runtime/worker_cache_logger.h"
 #include "tensorflow/core/distributed_runtime/worker_interface.h"
+#include "tensorflow/core/distributed_runtime/rendezvous_mgr_interface.h"
+#ifdef USE_RDMA
+#include "tensorflow/core/distributed_runtime/rdma/rdma_mgr.h"
+#endif
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/strings/str_util.h"
