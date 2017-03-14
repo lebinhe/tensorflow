@@ -50,6 +50,9 @@ class Rendezvous : public core::RefCounted {
   static string CreateKey(const string& src_device, uint64 src_incarnation,
                           const string& dst_device, const string& name,
                           const FrameAndIter& frame_iter);
+  static string AppendStepidToKey(const string& key, int64 step_id);
+  static void GetKeyAndStepId(const string& key_with_step_id, string& key, 
+                       int64& step_id);
 
   // Parses the key constructed by CreateKey and parse src/dst device
   // names into structures respectively.

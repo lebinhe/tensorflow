@@ -37,15 +37,22 @@ load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_tests")
 load(
     "//tensorflow/core:platform/default/build_config.bzl",
     "tf_kernel_tests_linkstatic",
+    "tf_rdma_lib_deps",
 )
 load(
     "//tensorflow/core:platform/default/build_config_root.bzl",
     "tf_cuda_tests_tags",
 )
-
 package(default_visibility = [
     "//tensorflow:internal",
 ])
+
+config_setting(
+    name = "using_rdma",
+    values = {
+        "define": "using_rdma=true"
+    },
+)
 
 cc_library(
     name = "grpc_util",
@@ -276,7 +283,10 @@ cc_library(
         "//tensorflow/core/distributed_runtime:worker_env",
         "@grpc//:grpc++_unsecure",
         "@grpc//:grpc_unsecure",
-    ],
+    ] + tf_rdma_lib_deps(),
+    copts = select({
+        ":using_rdma": ["-DUSE_RDMA"],
+        "//conditions:default": []}),
     alwayslink = 1,
 )
 

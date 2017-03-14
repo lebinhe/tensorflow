@@ -132,7 +132,11 @@ class GrpcWorkerService : public AsyncServiceInterface {
 
     ENQUEUE_REQUEST(Logging, false);
     ENQUEUE_REQUEST(Tracing, false);
-
+    
+    for (int i = 0; i < 10; ++i) {
+      ENQUEUE_REQUEST(GetRemoteAddress, false);
+    }
+ 
     void* tag;
     bool ok;
 
@@ -268,6 +272,15 @@ class GrpcWorkerService : public AsyncServiceInterface {
       call->SendResponse(ToGrpcStatus(s));
     });
     ENQUEUE_REQUEST(Tracing, false);
+  }
+
+  void GetRemoteAddressHandler(WorkerCall<GetRemoteAddressRequest, 
+                                 GetRemoteAddressResponse>* call) {
+    Schedule([this, call]() {
+      Status s = worker_->GetRemoteAddress(&call->request, &call->response);
+      call->SendResponse(ToGrpcStatus(s));
+    });
+    ENQUEUE_REQUEST(GetRemoteAddress, false);
   }
 #undef ENQUEUE_REQUEST
 

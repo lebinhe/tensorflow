@@ -34,6 +34,7 @@ load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_tests")
 load(
     "//tensorflow/core:platform/default/build_config.bzl",
     "tf_kernel_tests_linkstatic",
+    "tf_rdma_lib_deps",
 )
 load(
     "//tensorflow/core:platform/default/build_config_root.bzl",
@@ -43,6 +44,13 @@ load(
 package(default_visibility = [
     "//tensorflow:internal",
 ])
+
+config_setting(
+    name = "using_rdma",
+    values = {
+        "define": "using_rdma=true"
+    },
+)
 
 cc_library(
     name = "message_wrappers",
@@ -104,7 +112,10 @@ cc_library(
         ":worker_interface",
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:lib_internal",
-    ],
+    ] + tf_rdma_lib_deps(),
+    copts = select({
+        ":using_rdma": ["-DUSE_RDMA"],
+        "//conditions:default": []}),
 )
 
 cc_library(

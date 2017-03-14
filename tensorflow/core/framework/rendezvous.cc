@@ -111,6 +111,30 @@ Status Rendezvous::ParseKey(StringPiece key, ParsedKey* out) {
   return errors::InvalidArgument("Invalid  rendezvous key: ", key);
 }
 
+//static
+string Rendezvous::AppendStepidToKey(const string& key, 
+        int64 step_id) {
+  return strings::StrCat(key, ";", step_id);
+}
+
+// static
+void Rendezvous::GetKeyAndStepId(const string& key_with_step_id, 
+        string& key, int64& step_id) {
+  StringPiece s(key_with_step_id);
+  // a key (with step_id) has exact 6 parts if split by ";"
+  // part 1: src_device;
+  // part 2: src_incarnation;
+  // part 3: dst_device;
+  // part 4: name;
+  // part 5: frame_iter.frame_id:frame_iter.iter_id
+  // part 6: step_id
+  std::vector<string> parts = str_util::Split(s, ';');
+  CHECK(parts.size()==6) << "Key with step_id must have 6 parts";
+  strings::safe_strto64(parts[5], &step_id);
+  parts.pop_back(); // remove step_id
+  key.assign(str_util::Join(parts, ";")); // stitch them together
+}
+
 Rendezvous::~Rendezvous() {}
 
 Status Rendezvous::Recv(const ParsedKey& key, const Args& recv_args,

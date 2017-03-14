@@ -103,6 +103,10 @@ class WorkerInterface {
 
   virtual void TracingAsync(const TracingRequest* request,
                             TracingResponse* response, StatusCallback done) = 0;
+  
+  virtual void GetRemoteAddressAsync(const GetRemoteAddressRequest* request,
+                              GetRemoteAddressResponse* response,
+                              StatusCallback done) = 0;
 
   Status GetStatus(const GetStatusRequest* request,
                    GetStatusResponse* response) {
@@ -135,6 +139,11 @@ class WorkerInterface {
 
   Status Tracing(const TracingRequest* request, TracingResponse* response) {
     return CallAndWait(&ME::TracingAsync, request, response);
+  }
+
+  Status GetRemoteAddress(const GetRemoteAddressRequest* request, 
+                          GetRemoteAddressResponse* response) {
+    return CallAndWait(&ME::GetRemoteAddressAsync, request, response);
   }
 
  protected:

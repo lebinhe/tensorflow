@@ -55,7 +55,7 @@ class GrpcServer : public ServerInterface {
 
  protected:
   Status Init();
-
+  
   // A subclass can override this method to support secure credentials.
   virtual std::shared_ptr<::grpc::ServerCredentials> GetServerCredentials(
       const ServerDef& server_def) const;
@@ -107,6 +107,10 @@ class GrpcServer : public ServerInterface {
   std::unique_ptr<Thread> worker_thread_ GUARDED_BY(mu_);
 
   std::unique_ptr<::grpc::Server> server_ GUARDED_BY(mu_);
+#ifdef USE_RDMA  
+  // Whether to use rdma for tensor data transfers
+  bool use_rdma_;   
+#endif
 };
 
 }  // namespace tensorflow

@@ -64,4 +64,7 @@ service WorkerService {
 
   // See worker.proto for details.
   rpc Tracing(TracingRequest) returns (TracingResponse);
+
+  // See worker.proto for details.
+  rpc GetRemoteAddress(GetRemoteAddressRequest) returns (GetRemoteAddressResponse);
 }

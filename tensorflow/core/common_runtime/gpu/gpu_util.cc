@@ -186,6 +186,23 @@ void GPUUtil::SetProtoFromGPU(const Tensor& tensor, Device* dev,
       });
 }
 
+// static sync wrapper:
+Status GPUUtil::SetProtoFromGPUSync(const Tensor& tensor, Device* dev,
+                              const DeviceContext* device_context,
+                              TensorProto* proto, bool is_dead) {
+  Notification n;
+  Status status;
+  GPUUtil::SetProtoFromGPU(tensor, dev,
+                  device_context,
+                  proto, is_dead,
+                  [&n, &status](const Status& s) {
+                     status = s;
+                     n.Notify();
+                 });
+  n.WaitForNotification();
+  return status;
+}
+
 // static
 void GPUUtil::DeviceToDeviceCopy(DeviceContext* send_dev_context,
                                  DeviceContext* recv_dev_context, Device* src,

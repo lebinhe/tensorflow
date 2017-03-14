@@ -77,6 +77,10 @@ class Worker : public WorkerInterface {
 
   void TracingAsync(const TracingRequest* request, TracingResponse* response,
                     StatusCallback done) override;
+  
+  void GetRemoteAddressAsync(const GetRemoteAddressRequest* request,
+                              GetRemoteAddressResponse* response,
+                              StatusCallback done) override;
 
  protected:
   WorkerEnv* const env_;  // Not owned.

@@ -46,6 +46,8 @@ const char* GrpcWorkerMethodName(GrpcWorkerMethod id) {
       return "/tensorflow.WorkerService/Logging";
     case GrpcWorkerMethod::kTracing:
       return "/tensorflow.WorkerService/Tracing";
+    case GrpcWorkerMethod::kGetRemoteAddress:
+      return "/tensorflow.WorkerService/GetRemoteAddress";
   }
 }
 

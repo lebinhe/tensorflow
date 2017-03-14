@@ -257,6 +257,28 @@ else
   sed_hyphen_i -e "s/^WITH_XLA_SUPPORT = [FT].*/WITH_XLA_SUPPORT = False/" tensorflow/core/platform/default/build_config_root.bzl
 fi
 
+# RDMA configuration
+while [ "$TF_NEED_RDMA" == "" ]; do
+  read -p "Do you wish to build TensorFlow with "\
+"RDMA support? [y/N] " INPUT
+  case $INPUT in
+    [Yy]* ) echo "RDMA support will be enabled for "\
+"TensorFlow"; TF_NEED_RDMA=1;;
+    [Nn]* ) echo "No RDMA support will be enabled for "\
+"TensorFlow"; TF_NEED_RDMA=0;;
+    "" ) echo "No RDMA support will be enabled for "\
+"TensorFlow"; TF_NEED_RDMA=0;;
+    * ) echo "Invalid selection: " $INPUT;;
+  esac
+done
+
+if [ "$TF_NEED_RDMA" == "1" ]; then
+  # Update Bazel build configuration.
+  perl -pi -e "s,WITH_RDMA_SUPPORT = (False|True),WITH_RDMA_SUPPORT = True,s" tensorflow/core/platform/default/build_config.bzl
+else
+  # Update Bazel build configuration.
+  perl -pi -e "s,WITH_RDMA_SUPPORT = (False|True),WITH_RDMA_SUPPORT = False,s" tensorflow/core/platform/default/build_config.bzl
+fi
 
 # Invoke python_config and set up symlinks to python includes
 ./util/python/python_config.sh --setup "$PYTHON_BIN_PATH"
