@@ -70,6 +70,8 @@ To help you upgrade your existing TensorFlow Python code to match the API change
   behavior by specifying the attribute `dct_method='INTEGER_ACCURATE'`.
 * `tf.complex_abs` has been removed from the Python interface. `tf.abs`
   supports complex tensors and should be used instead.
+* In the C++ API (in tensorflow/cc), Input, Output, etc. have moved
+  from the tensorflow::ops namespace to tensorflow.
 * Template.`var_scope` property renamed to `.variable_scope`
 * SyncReplicasOptimizer is removed and SyncReplicasOptimizerV2 renamed to SyncReplicasOptimizer.
 * `tf.zeros_initializer()` and `tf.ones_initializer()` now return a callable
@@ -78,7 +80,7 @@ To help you upgrade your existing TensorFlow Python code to match the API change
 * `SparseTensor.shape` has been renamed to `SparseTensor.dense_shape`.  Same for
   `SparseTensorValue.shape`.
 * Replace tf.scalar_summary, tf.histogram_summary, tf.audio_summary, tf.image_summary with tf.summary.scalar, tf.summary.histogram, tf.summary.audio, tf.summary.image, respectively. The new summary ops take name rather than tag as their first argument, meaning summary ops now respect TensorFlow name scopes.
-* Replace tf.train.SummaryWriter and tf.train.SummaryWriterCache with tf.summary.FileWriter and tf.summary.FileWriterCache. 
+* Replace tf.train.SummaryWriter and tf.train.SummaryWriterCache with tf.summary.FileWriter and tf.summary.FileWriterCache.
 * Removes RegisterShape from public API. Use C++ shape function registration
   instead.
 * Deprecated `_ref` dtypes from the python API.
@@ -194,7 +196,7 @@ answered questions, and were part of inspiring discussions.
   indexing now starts from 1 instead of 0, and `bus_id==0` is used where
   previously `BUS_ANY` was used.
 * `Env::FileExists` and `FileSystem::FileExists` now return a tensorflow::Status
-  intead of a bool. Any callers to this function can be converted to a bool
+  instead of a bool. Any callers to this function can be converted to a bool
   by adding .ok() to the call.
 * The C API type `TF_SessionWithGraph` has been renamed to `TF_Session`,
   indicating its preferred use in language bindings for TensorFlow.
@@ -213,7 +215,7 @@ answered questions, and were part of inspiring discussions.
 * `SparseTensor.shape` has been renamed to `SparseTensor.dense_shape`.  Same for
   `SparseTensorValue.shape`.
 * `Env::FileExists` and `FileSystem::FileExists` now return a
-  `tensorflow::Status` intead of a bool. Any callers to this function can be
+  `tensorflow::Status` instead of a bool. Any callers to this function can be
   converted to a bool by adding `.ok()` to the call.
 * C API: Type `TF_SessionWithGraph` has been renamed to `TF_Session`, indicating
   its preferred use in language bindings for TensorFlow. What was previously

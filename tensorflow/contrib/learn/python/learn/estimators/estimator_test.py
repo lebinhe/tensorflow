@@ -22,16 +22,7 @@ import functools
 import itertools
 import json
 import os
-import sys
 import tempfile
-
-# pylint: disable=g-bad-todo
-# TODO(#6568): Remove this hack that makes dlopen() not crash.
-# pylint: enable=g-bad-todo
-# pylint: disable=g-import-not-at-top
-if hasattr(sys, 'getdlopenflags') and hasattr(sys, 'setdlopenflags'):
-  import ctypes
-  sys.setdlopenflags(sys.getdlopenflags() | ctypes.RTLD_GLOBAL)
 
 import numpy as np
 import six
@@ -213,12 +204,12 @@ def _build_estimator_for_export_tests(tmpdir):
 
   feature_spec = feature_column_lib.create_feature_spec_for_parsing(
       feature_columns)
-  export_input_fn = input_fn_utils.build_parsing_serving_input_fn(feature_spec)
+  serving_input_fn = input_fn_utils.build_parsing_serving_input_fn(feature_spec)
 
   # hack in an op that uses an asset, in order to test asset export.
   # this is not actually valid, of course.
-  def export_input_fn_with_asset():
-    features, labels, inputs = export_input_fn()
+  def serving_input_fn_with_asset():
+    features, labels, inputs = serving_input_fn()
 
     vocab_file_name = os.path.join(tmpdir, 'my_vocab_file')
     vocab_file = gfile.GFile(vocab_file_name, mode='w')
@@ -231,7 +222,7 @@ def _build_estimator_for_export_tests(tmpdir):
 
     return input_fn_utils.InputFnOps(features, labels, inputs)
 
-  return est, export_input_fn_with_asset
+  return est, serving_input_fn_with_asset
 
 
 class CheckCallsMonitor(monitors_lib.BaseMonitor):
@@ -367,7 +358,7 @@ class EstimatorTest(test.TestCase):
           predictions=constant_op.constant(0.),
           loss=constant_op.constant(0.),
           train_op=constant_op.constant(0.),
-          training_scaffold=monitored_session.Scaffold(init_fn=_init_fn))
+          scaffold=monitored_session.Scaffold(init_fn=_init_fn))
 
     est = estimator.Estimator(model_fn=_model_fn_scaffold)
     est.fit(input_fn=boston_input_fn, steps=1)
@@ -401,6 +392,24 @@ class EstimatorTest(test.TestCase):
     est.fit(input_fn=test_input.config_test_input_fn, steps=1)
     # If input_fn ran, it will have given us the random seed set on the graph.
     self.assertEquals(test_random_seed, test_input.random_seed)
+
+  def testRunConfigModelDir(self):
+    config = run_config.RunConfig(model_dir='test_dir')
+    est = estimator.Estimator(model_fn=linear_model_fn,
+                              config=config)
+    self.assertEqual('test_dir', est.config.model_dir)
+
+  def testModelDirAndRunConfigModelDir(self):
+    config = run_config.RunConfig(model_dir='test_dir')
+    est = estimator.Estimator(model_fn=linear_model_fn,
+                              config=config,
+                              model_dir='test_dir')
+    self.assertEqual('test_dir', est.config.model_dir)
+
+    with self.assertRaises(ValueError):
+      estimator.Estimator(model_fn=linear_model_fn,
+                          config=config,
+                          model_dir='different_dir')
 
   def testCheckInputs(self):
     est = estimator.SKCompat(estimator.Estimator(model_fn=linear_model_fn))
@@ -510,6 +519,16 @@ class EstimatorTest(test.TestCase):
         estimator.Estimator(
             model_fn=linear_model_params_fn, params={'learning_rate': 0.01}))
     est.fit(x=boston.data, y=boston.target, steps=100)
+
+  def testHooksNotChanged(self):
+    est = estimator.Estimator(model_fn=logistic_model_no_mode_fn)
+    # We pass empty array and expect it to remain empty after calling
+    # fit and evaluate. Requires inside to copy this array if any hooks were
+    # added.
+    my_array = []
+    est.fit(input_fn=iris_input_fn, steps=100, monitors=my_array)
+    _ = est.evaluate(input_fn=iris_input_fn, steps=1, hooks=my_array)
+    self.assertEqual(my_array, [])
 
   def testIrisIterator(self):
     iris = base.load_iris()
@@ -650,7 +669,7 @@ class EstimatorTest(test.TestCase):
 
   def test_export_savedmodel(self):
     tmpdir = tempfile.mkdtemp()
-    est, export_input_fn = _build_estimator_for_export_tests(tmpdir)
+    est, serving_input_fn = _build_estimator_for_export_tests(tmpdir)
 
     extra_file_name = os.path.join(
         compat.as_bytes(tmpdir), compat.as_bytes('my_extra_file'))
@@ -662,7 +681,7 @@ class EstimatorTest(test.TestCase):
     export_dir_base = os.path.join(
         compat.as_bytes(tmpdir), compat.as_bytes('export'))
     export_dir = est.export_savedmodel(
-        export_dir_base, export_input_fn, assets_extra=assets_extra)
+        export_dir_base, serving_input_fn, assets_extra=assets_extra)
 
     self.assertTrue(gfile.Exists(export_dir_base))
     self.assertTrue(gfile.Exists(export_dir))

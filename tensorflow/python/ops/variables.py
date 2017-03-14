@@ -196,8 +196,9 @@ class Variable(object):
           dtype=dtype,
           expected_shape=expected_shape)
 
-  def __str__(self):
-    return str(self._snapshot)
+  def __repr__(self):
+    return "<tf.Variable '%s' shape=%s dtype=%s>" % (
+            self.name, self.get_shape(), self.dtype.name)
 
   def _init_from_args(self,
                       initial_value=None,
@@ -722,13 +723,18 @@ class Variable(object):
     """The `Graph` of this variable."""
     return self._variable.graph
 
-  def get_shape(self):
+  @property
+  def shape(self):
     """The `TensorShape` of this variable.
 
     Returns:
       A `TensorShape`.
     """
     return self._variable.get_shape()
+
+  def get_shape(self):
+    """Alias of Variable.shape."""
+    return self.shape
 
   def to_proto(self, export_scope=None):
     """Converts a `Variable` to a `VariableDef` protocol buffer.
@@ -918,23 +924,21 @@ class PartitionedVariable(object):
       raise ValueError("partition values must be positive: %s" % partitions)
     if not variable_list:
       raise ValueError("variable_list may not be empty")
-    for v in variable_list:
-      if not isinstance(v, Variable):
-        raise TypeError("Not all entries in variable_list are variables: %s"
-                        % variable_list)
-    # Sort the variable_list lexicographically according to var offset value.
     # pylint: disable=protected-access
-    if not all([v._get_save_slice_info() is not None for v in variable_list]):
-      raise ValueError("All variables must have a save_slice_info available: %s"
-                       % [v.name for v in variable_list])
-    if len(shape) != len(partitions):
-      raise ValueError("len(shape) != len(partitions): %s vs. %s"
-                       % (shape, partitions))
-    if not all([v._get_save_slice_info().full_shape == shape]):
-      raise ValueError(
-          "All variables' full shapes must match shape: %s; "
-          "but full shapes were: %s"
-          % (shape, str([v._get_save_slice_info().full_shape])))
+    for v in variable_list:
+      # Sort the variable_list lexicographically according to var offset value.
+      if not all([v._get_save_slice_info() is not None for v in variable_list]):
+        raise ValueError(
+            "All variables must have a save_slice_info available: %s"
+            % [v.name for v in variable_list])
+      if len(shape) != len(partitions):
+        raise ValueError("len(shape) != len(partitions): %s vs. %s"
+                         % (shape, partitions))
+      if not all([v._get_save_slice_info().full_shape == shape]):
+        raise ValueError(
+            "All variables' full shapes must match shape: %s; "
+            "but full shapes were: %s"
+            % (shape, str([v._get_save_slice_info().full_shape])))
     self._variable_list = sorted(
         variable_list, key=lambda v: v._get_save_slice_info().var_offset)
     # pylint: enable=protected-access
@@ -1082,8 +1086,8 @@ def local_variables():
   checkpoint and used for temporary or intermediate values.
   For example, they can be used as counters for metrics computation or
   number of epochs this machine has read data.
-  The `local_variable()` automatically adds new variable to
-  `GraphKeys.LOCAL_VARIABLES`.
+  The `tf.contrib.framework.local_variable()` function automatically adds the
+  new variable to `GraphKeys.LOCAL_VARIABLES`.
   This convenience function returns the contents of that collection.
 
   An alternative to local variables are global variables. See
@@ -1299,19 +1303,5 @@ ops.register_tensor_conversion_function(
     PartitionedVariable, PartitionedVariable._TensorConversionFunction)
 # pylint: enable=protected-access
 
+
 ops.register_dense_tensor_like_type(Variable)
-ops.register_proto_function(
-    ops.GraphKeys.GLOBAL_VARIABLES,
-    proto_type=variable_pb2.VariableDef,
-    to_proto=Variable.to_proto,
-    from_proto=Variable.from_proto)
-ops.register_proto_function(
-    ops.GraphKeys.TRAINABLE_VARIABLES,
-    proto_type=variable_pb2.VariableDef,
-    to_proto=Variable.to_proto,
-    from_proto=Variable.from_proto)
-ops.register_proto_function(
-    ops.GraphKeys.MOVING_AVERAGE_VARIABLES,
-    proto_type=variable_pb2.VariableDef,
-    to_proto=Variable.to_proto,
-    from_proto=Variable.from_proto)

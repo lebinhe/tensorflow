@@ -7,7 +7,6 @@ load("//tensorflow:tensorflow.bzl", "if_not_mobile")
 # configure may change the following lines
 WITH_GCP_SUPPORT = False
 WITH_HDFS_SUPPORT = False
-WITH_XLA_SUPPORT = False
 WITH_JEMALLOC = True
 WITH_RDMA_SUPPORT = False
 
@@ -146,6 +145,23 @@ def tf_additional_proto_srcs():
       "platform/default/protobuf.cc",
   ]
 
+def tf_env_time_hdrs():
+  return [
+      "platform/env_time.h",
+  ]
+
+def tf_env_time_srcs():
+  return select({
+    "//tensorflow:windows" : native.glob([
+        "platform/windows/env_time.cc",
+        "platform/env_time.cc",
+      ], exclude = []),
+    "//conditions:default" : native.glob([
+        "platform/posix/env_time.cc",
+        "platform/env_time.cc",
+      ], exclude = []),
+  })
+
 def tf_additional_stream_executor_srcs():
   return ["platform/default/stream_executor.h"]
 
@@ -245,3 +261,10 @@ def tf_rdma_lib_deps():
     deps.append("//tensorflow/core/distributed_runtime/rdma:rdma_rendezvous_mgr")
     deps.append("//tensorflow/core/distributed_runtime/rdma:rdma_mgr")
   return deps
+
+def tf_lib_proto_parsing_deps():
+  return [
+      ":protos_all_cc",
+      "//tensorflow/core/platform/default/build_config:proto_parsing",
+  ]
+
