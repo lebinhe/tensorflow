@@ -78,14 +78,12 @@ class LogMessageFatal : public LogMessage {
 
 #ifdef IS_MOBILE_PLATFORM
 // Turn VLOG off when under mobile devices for considerations of binary size.
-//#define VLOG_IS_ON(lvl) ((lvl) <= 0)
-#define VLOG_IS_ON(lvl) ((lvl) <= 10)
+#define VLOG_IS_ON(lvl) ((lvl) <= 0)
 #else
 // Otherwise, Set TF_CPP_MIN_VLOG_LEVEL environment to update minimum log level
 // of VLOG
 #define VLOG_IS_ON(lvl) \
-  // ((lvl) <= ::tensorflow::internal::LogMessage::MinVLogLevel())
-  ((lvl) <= 10)
+  ((lvl) <= ::tensorflow::internal::LogMessage::MinVLogLevel())
 #endif
 
 #define VLOG(lvl)      \
